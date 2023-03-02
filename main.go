@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"log"
 	"pingrobot/models"
+	"pingrobot/storage"
 	"pingrobot/telegram"
 	"time"
 )
 
 const (
-	WOKER_COUNT = 3
+	WOKER_COUNT = 100
 	INTERVAL    = time.Second * 5
 	TG_TOKEN    = "6040490988:AAFdeU7w_369vpt7iuwyfN4tqhK8wnUcHlM"
 )
@@ -22,38 +23,48 @@ var urls = []string{
 }
 
 func main() {
+	stor, err := storage.InitDatabase()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	bot, err := telegram.InitTelegramBot(TG_TOKEN)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal(err)
 	}
 
-	//after command '/start' continue code
-	bot.CheckUpdates()
-
-	jobs := make(chan models.URL, len(urls))
-	result := make(chan models.Result, len(urls))
-
-	go createPool(jobs, result)
-	go writeJobs(jobs)
-
-	//get result response and send telegram, show in terminal
-	func() {
-		for r := range result {
-			info := r.Info()
-			fmt.Println(info)
-			if r.Error != nil {
-				bot.SendMessage(info)
-			}
+	user := make(chan models.UserInfo)
+	go func() {
+		if err := bot.CheckUpdates(user, stor); err != nil {
+			log.Fatal(err)
 		}
 	}()
 
+	for u := range user {
+		checking(u, *bot, *stor)
+	}
+
 }
 
-func writeJobs(jobs chan<- models.URL) {
+func checking(data models.UserInfo, bot telegram.TelegramBot, storage storage.Storage) {
+	jobs := make(chan models.URL, len(urls))
+	result := make(chan models.Result, len(urls))
+	go createPool(jobs, result)
+	go writeJobs(jobs, data)
+
+	for r := range result {
+		info := r.Info()
+		fmt.Println(info)
+		if r.Error != nil {
+			bot.SendMessage(r.ChatId, info)
+		}
+	}
+}
+
+func writeJobs(jobs chan<- models.URL, data models.UserInfo) {
 	for {
-		for _, url := range urls {
-			urlR := models.NewURL(url)
+		for _, url := range data.URLs {
+			urlR := models.NewURL(url, data.UserId, data.ChatId)
 			jobs <- urlR
 		}
 		time.Sleep(INTERVAL)

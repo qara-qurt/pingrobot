@@ -7,6 +7,8 @@ import (
 )
 
 type Result struct {
+	UserId     int64
+	ChatId     int64
 	URL        string
 	StatusCode int
 	Timeout    time.Duration
@@ -21,17 +23,21 @@ func (r *Result) Info() string {
 }
 
 type URL struct {
-	URL string
+	UserId int64
+	ChatId int64
+	URL    string
 }
 
-func NewURL(url string) URL {
+func NewURL(url string, userId, chatId int64) URL {
 	return URL{
-		url,
+		URL:    url,
+		UserId: userId,
+		ChatId: chatId,
 	}
 }
 
 func (u URL) Process() Result {
-	result := Result{URL: u.URL}
+	result := Result{URL: u.URL, ChatId: u.ChatId}
 	client := client.NewClient()
 	now := time.Now()
 
@@ -44,4 +50,10 @@ func (u URL) Process() Result {
 	result.StatusCode = res.StatusCode
 	result.Timeout = time.Since(now)
 	return result
+}
+
+type UserInfo struct {
+	UserId int64
+	ChatId int64
+	URLs   []string
 }
